@@ -1,5 +1,23 @@
 local M = {}
 
+--- Returns true when the cursor is inside a Tree-sitter (code) node,
+--- meaning it is inside a <% %> EJS tag. Returns false for (content) nodes
+--- (plain HTML) and when no parser is active.
+local function cursor_in_code_node()
+  local node = vim.treesitter.get_node()
+  if not node then
+    return false
+  end
+  local n = node
+  while n do
+    if n:type() == 'code' then
+      return true
+    end
+    n = n:parent()
+  end
+  return false
+end
+
 --- Attach LSP clients to a single EJS buffer.
 --- Guards against duplicate client attachment on the same buffer.
 ---@param bufnr integer
@@ -24,10 +42,48 @@ local function attach(bufnr)
     vim.fn.executable('typescript-language-server') == 1
     and #vim.lsp.get_clients({ bufnr = bufnr, name = 'ts_ls' }) == 0
   then
-    vim.lsp.start(
-      { name = 'ts_ls', cmd = { 'typescript-language-server', '--stdio' }, root_dir = root_dir },
-      { bufnr = bufnr }
-    )
+    vim.lsp.start({
+      name = 'ts_ls',
+      cmd = { 'typescript-language-server', '--stdio' },
+      root_dir = root_dir,
+      on_attach = function(client, attached_bufnr)
+        -- The root problem: Neovim sends textDocument/documentHighlight to all
+        -- attached clients on CursorHold. ts_ls only understands JS content, so
+        -- when the cursor is on an HTML (content) node it returns -32603.
+        --
+        -- Fix: tell Neovim that this ts_ls instance does not provide
+        -- documentHighlight (prevents the automatic dispatch), then manually
+        -- drive the request from a CursorHold autocmd, routing to ts_ls only
+        -- when the cursor is confirmed to be inside a (code) node.
+        client.server_capabilities.documentHighlightProvider = false
+
+        vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
+          buffer = attached_bufnr,
+          desc = 'ejs.nvim: send documentHighlight to ts_ls only for JS nodes',
+          callback = function()
+            if not cursor_in_code_node() then
+              -- Cursor is in HTML content; clear any stale JS highlights and stop.
+              vim.lsp.util.buf_clear_references(attached_bufnr)
+              return
+            end
+            local win = vim.api.nvim_get_current_win()
+            local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
+            client.request(
+              'textDocument/documentHighlight',
+              params,
+              function(err, result)
+                if err or not result then
+                  vim.lsp.util.buf_clear_references(attached_bufnr)
+                  return
+                end
+                vim.lsp.util.buf_highlight_references(attached_bufnr, result, client.offset_encoding)
+              end,
+              attached_bufnr
+            )
+          end,
+        })
+      end,
+    }, { bufnr = bufnr })
   end
 end
 

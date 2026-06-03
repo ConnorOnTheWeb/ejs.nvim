@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the HTML `(content)` injection where combining fragments is correct.
   Additionally moved predicates inside the outer pattern for unambiguous capture
   scoping.
+- Query files were located in `queries/ejs/` which Neovim never reads.
+  `vim.treesitter.language.register('embedded_template', 'ejs')` causes
+  Neovim to resolve the language as `embedded_template` and load queries from
+  `queries/embedded_template/`. Moved both `injections.scm` and
+  `highlights.scm` to `queries/embedded_template/`.
 
 ## [1.0.2] - 2026-06-03
 

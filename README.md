@@ -7,7 +7,7 @@ LSP configuration, and LuaSnip snippets. Works out of the box with lazy.nvim.
 ## Features
 
 - Tree-sitter syntax highlighting: HTML outside `<% %>` tags, JavaScript inside them
-- Language injection via `queries/ejs/injections.scm` using the `embedded_template` parser
+- Language injection via `queries/embedded_template/injections.scm` using the `embedded_template` parser
 - LSP attachment: `html-lsp` for HTML portions, `ts_ls` for JavaScript portions
 - LuaSnip snippets for common EJS patterns
 - `:checkhealth ejs` to verify your setup
@@ -126,7 +126,7 @@ This tells Neovim to use the `embedded_template` parser (from
 `tree-sitter/tree-sitter-embedded-template`) whenever a buffer with filetype
 `ejs` is opened.
 
-`queries/ejs/injections.scm` injects:
+`queries/embedded_template/injections.scm` injects:
 - `html` into `(content)` nodes (text outside `<% %>` tags)
 - `javascript` into `(code)` nodes that are children of `(directive)` nodes (`<% %>` scriptlet blocks)
 - `javascript` into `(code)` nodes that are children of `(output_directive)` nodes (`<%= %>` and `<%- %>` output blocks)

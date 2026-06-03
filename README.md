@@ -128,7 +128,8 @@ This tells Neovim to use the `embedded_template` parser (from
 
 `queries/ejs/injections.scm` injects:
 - `html` into `(content)` nodes (text outside `<% %>` tags)
-- `javascript` into `(code)` nodes (text inside `<% %>` tags)
+- `javascript` into `(code)` nodes that are children of `(directive)` nodes (`<% %>` scriptlet blocks)
+- `javascript` into `(code)` nodes that are children of `(output_directive)` nodes (`<%= %>` and `<%- %>` output blocks)
 
 Both injections use `#set! injection.combined` so that multiple disjoint
 regions of the same language are merged into a single virtual document for

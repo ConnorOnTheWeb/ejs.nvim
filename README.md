@@ -36,13 +36,21 @@ npm install -g vscode-langservers-extracted typescript typescript-language-serve
 
 ### No plugin manager (built-in packages)
 
-Neovim has built-in package support. Clone the repo into your `pack` directory
-and Neovim will load it automatically on startup:
+Neovim has built-in package support. The `pack` directory may not exist yet;
+create it and clone in one step:
 
 ```sh
+mkdir -p ~/.local/share/nvim/site/pack/plugins/start
 git clone https://github.com/connorontheweb/ejs.nvim \
   ~/.local/share/nvim/site/pack/plugins/start/ejs.nvim
 ```
+
+`~/.local/share/nvim` is the default data directory on macOS and Linux. On
+Windows it is `~/AppData/Local/nvim-data`. To find the exact path on any OS,
+run this inside Neovim: `:lua print(vim.fn.stdpath('data'))`
+
+The `plugins` part of the path is an arbitrary namespace you can change to
+anything. `start` means the plugin loads automatically on startup.
 
 Then add this to your `init.lua`:
 

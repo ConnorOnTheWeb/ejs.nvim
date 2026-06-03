@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-06-03
+
+### Fixed
+
+- JavaScript was still not highlighted after the 1.0.2 query fix. The root
+  cause was `#set! injection.combined` on the JavaScript injections. With
+  `injection.combined`, Neovim concatenates all `(code)` node texts into a
+  single virtual JS document before parsing. Disconnected scriptlet blocks
+  rarely form valid JavaScript when concatenated, so the TS parser returns an
+  error tree with no highlights. Removed `injection.combined` from both
+  `(directive (code))` and `(output_directive (code))` patterns so each block
+  is parsed as an independent JS fragment. `injection.combined` is retained for
+  the HTML `(content)` injection where combining fragments is correct.
+  Additionally moved predicates inside the outer pattern for unambiguous capture
+  scoping.
+
 ## [1.0.2] - 2026-06-03
 
 ### Fixed

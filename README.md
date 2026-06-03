@@ -142,6 +142,15 @@ checks `vim.lsp.get_clients()` to prevent duplicate attachment. The binary
 names `vscode-html-language-server` and `typescript-language-server` must be
 on `$PATH`.
 
+`ts_ls` is attached with an `on_attach` callback that disables the
+`documentHighlightProvider` capability for the client. Without this, Neovim
+sends `textDocument/documentHighlight` to `ts_ls` whenever the cursor rests on
+an HTML node, which the server cannot handle and returns a `-32603` error. A
+buffer-local `CursorHold` autocmd replaces the default dispatch: it uses
+`vim.treesitter.get_node()` to check whether the cursor is inside a `(code)`
+node and only sends the request to `ts_ls` when it is. Stale highlights are
+cleared when the cursor moves back into HTML content.
+
 `root_dir` is resolved with:
 
 ```lua

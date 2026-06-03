@@ -2,7 +2,7 @@
 
 First-class EJS (Embedded JavaScript) template support for Neovim. Wires up
 the existing `tree-sitter-embedded-template` grammar with language injection,
-LSP configuration, and LuaSnip snippets. Works out of the box with lazy.nvim.
+LSP configuration, and LuaSnip snippets.
 
 ## Features
 
@@ -34,6 +34,53 @@ npm install -g vscode-langservers-extracted typescript typescript-language-serve
 
 ## Installation
 
+### No plugin manager (built-in packages)
+
+Neovim has built-in package support. Clone the repo into your `pack` directory
+and Neovim will load it automatically on startup:
+
+```sh
+git clone https://github.com/connorontheweb/ejs.nvim \
+  ~/.local/share/nvim/site/pack/plugins/start/ejs.nvim
+```
+
+Then add this to your `init.lua`:
+
+```lua
+require('ejs').setup()
+```
+
+If you use `init.vim` instead:
+
+```vim
+lua require('ejs').setup()
+```
+
+### vim-plug
+
+```vim
+Plug 'connorontheweb/ejs.nvim'
+```
+
+Then in your config:
+
+```lua
+require('ejs').setup()
+```
+
+### packer.nvim
+
+```lua
+use 'connorontheweb/ejs.nvim'
+```
+
+### mini.deps
+
+```lua
+MiniDeps.add('connorontheweb/ejs.nvim')
+require('ejs').setup()
+```
+
 ### lazy.nvim
 
 ```lua
@@ -49,6 +96,10 @@ npm install -g vscode-langservers-extracted typescript typescript-language-serve
 }
 ```
 
+When using lazy.nvim with `opts = {}`, `setup()` is called automatically by
+lazy.nvim. For all other setups, call `require('ejs').setup()` explicitly in
+your config. `setup()` is idempotent and safe to call multiple times.
+
 ### Post-install: install the Tree-sitter parser
 
 After installing the plugin, run the following command inside Neovim to install
@@ -58,12 +109,14 @@ the `embedded_template` Tree-sitter parser:
 :TSInstall embedded_template
 ```
 
-This only needs to be done once.
+This only needs to be done once. If you manage parsers manually (without
+nvim-treesitter), the parser can also be compiled from source:
+[tree-sitter/tree-sitter-embedded-template](https://github.com/tree-sitter/tree-sitter-embedded-template).
 
 ## Configuration
 
-All options default to `true`. Pass a table to `opts` (lazy.nvim) or
-`require('ejs').setup()` to override:
+All options default to `true`. Pass overrides to `require('ejs').setup()`, or
+via `opts` if using lazy.nvim:
 
 ```lua
 require('ejs').setup({
@@ -131,9 +184,12 @@ This tells Neovim to use the `embedded_template` parser (from
 - `javascript` into `(code)` nodes that are children of `(directive)` nodes (`<% %>` scriptlet blocks)
 - `javascript` into `(code)` nodes that are children of `(output_directive)` nodes (`<%= %>` and `<%- %>` output blocks)
 
-Both injections use `#set! injection.combined` so that multiple disjoint
-regions of the same language are merged into a single virtual document for
-consistent highlighting and LSP coverage.
+The HTML injection uses `#set! injection.combined` so that all `(content)`
+fragments are merged into a single virtual HTML document for consistent
+highlighting. The JavaScript injections do not use `injection.combined` --
+each `(code)` block is parsed independently, because concatenating disconnected
+scriptlet blocks rarely produces valid JavaScript and would cause the parser to
+return an error tree with no highlights.
 
 ### LSP
 

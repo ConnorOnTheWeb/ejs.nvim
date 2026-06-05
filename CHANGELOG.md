@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-06-05
+
+### Added
+
+- CSS highlighting inside `<style>` blocks now works out of the box. It was
+  already supported by the injection chain (content nodes are injected as HTML,
+  and the HTML parser's own injection queries inject CSS into `<style>`
+  elements) but neither the health check nor the README flagged the `html` and
+  `css` parsers as requirements, so users would silently get no highlighting.
+  Added health checks for both parsers and updated the post-install
+  `:TSInstall` step to include `html` and `css` alongside `embedded_template`.
+
 ## [1.0.3] - 2026-06-03
 
 ### Fixed

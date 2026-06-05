@@ -24,7 +24,29 @@ function M.check()
     )
   end
 
-  -- 3. html-lsp (vscode-html-language-server)
+  -- 3. html Tree-sitter parser (required for HTML highlighting and CSS injection)
+  local html_ts_ok = pcall(vim.treesitter.language.inspect, 'html')
+  if html_ts_ok then
+    vim.health.ok('html Tree-sitter parser is installed')
+  else
+    vim.health.warn(
+      'html Tree-sitter parser is not installed; HTML and CSS highlighting will not work',
+      { 'Run :TSInstall html' }
+    )
+  end
+
+  -- 4. css Tree-sitter parser (required for CSS highlighting inside <style> blocks)
+  local css_ts_ok = pcall(vim.treesitter.language.inspect, 'css')
+  if css_ts_ok then
+    vim.health.ok('css Tree-sitter parser is installed')
+  else
+    vim.health.warn(
+      'css Tree-sitter parser is not installed; CSS inside <style> blocks will not be highlighted',
+      { 'Run :TSInstall css' }
+    )
+  end
+
+  -- 6. html-lsp (vscode-html-language-server)
   if vim.fn.executable('vscode-html-language-server') == 1 then
     vim.health.ok('vscode-html-language-server found on PATH (html-lsp)')
   else
@@ -34,7 +56,7 @@ function M.check()
     )
   end
 
-  -- 4. typescript-language-server (backing ts_ls)
+  -- 7. typescript-language-server (backing ts_ls)
   if vim.fn.executable('typescript-language-server') == 1 then
     vim.health.ok('typescript-language-server found on PATH (ts_ls)')
   else
@@ -44,7 +66,7 @@ function M.check()
     )
   end
 
-  -- 5. LuaSnip (optional, warning only)
+  -- 8. LuaSnip (optional, warning only)
   local luasnip_ok = pcall(require, 'luasnip')
   if luasnip_ok then
     vim.health.ok('LuaSnip is installed; EJS snippets will be loaded')

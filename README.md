@@ -110,16 +110,17 @@ your config. `setup()` is idempotent and safe to call multiple times.
 
 ### Post-install: install the Tree-sitter parser
 
-After installing the plugin, run the following command inside Neovim to install
-the `embedded_template` Tree-sitter parser:
+After installing the plugin, install the required Tree-sitter parsers inside
+Neovim:
 
 ```
-:TSInstall embedded_template
+:TSInstall embedded_template html css
 ```
 
-This only needs to be done once. If you manage parsers manually (without
-nvim-treesitter), the parser can also be compiled from source:
-[tree-sitter/tree-sitter-embedded-template](https://github.com/tree-sitter/tree-sitter-embedded-template).
+`embedded_template` parses the EJS structure. `html` handles the HTML content
+between EJS tags. `css` handles CSS inside `<style>` blocks, injected
+automatically via the HTML parser's own injection queries. All three only need
+to be installed once.
 
 ## Configuration
 
@@ -142,6 +143,8 @@ Run `:checkhealth ejs` to diagnose your setup. The following checks are performe
 |---|---|---|
 | Neovim version | >= 0.10 | Error |
 | `embedded_template` parser | Installed via `:TSInstall` | Error |
+| `html` parser | Installed via `:TSInstall` | Warning |
+| `css` parser | Installed via `:TSInstall` | Warning |
 | `vscode-html-language-server` | Found on `$PATH` | Warning |
 | `typescript-language-server` | Found on `$PATH` | Warning |
 | LuaSnip | Installed and loadable | Warning |

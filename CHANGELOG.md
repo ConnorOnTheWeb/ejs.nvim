@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-06-05
+
+### Fixed
+
+- CSS inside `<style>` blocks was still not highlighted. Debugging revealed
+  that the `queries/html/injections.scm` on this system only contained a Python
+  injection for `<py-script>` elements and no `style_element` -> CSS rule. The
+  HTML sub-parser therefore never spawned a CSS child parser. Added
+  `queries/html/injections.scm` to the plugin with `;; extends` and an explicit
+  `(style_element (raw_text) @injection.content)` -> CSS pattern. Because the
+  file uses `;; extends`, it stacks on top of any existing HTML injection
+  queries in the runtimepath without replacing them.
+
 ## [1.0.6] - 2026-06-05
 
 ### Fixed

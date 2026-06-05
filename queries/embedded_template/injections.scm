@@ -1,16 +1,18 @@
 ;; extends
 
 ; Inject HTML into content nodes (text outside <% %> tags).
-; injection.combined merges all content fragments into one HTML document.
+; Each (content) fragment is parsed as an independent HTML document.
+; We intentionally do NOT use injection.combined here. With combined injection,
+; Neovim builds a virtual merged document and then has to map CSS (and JS)
+; sub-injection positions back through two offset layers, which causes the
+; CSS highlights inside <style> blocks to land at wrong buffer positions.
+; Without combined, each fragment is its own HTML parse, and <style> blocks
+; that contain no EJS tags (the common case) live in one complete fragment
+; that the HTML parser can inject CSS into correctly.
 ((content) @injection.content
- (#set! injection.language "html")
- (#set! injection.combined))
+ (#set! injection.language "html"))
 
 ; Inject JavaScript into code nodes inside <% %> scriptlet blocks.
-; Each block is parsed as an independent JS fragment -- do NOT use
-; injection.combined here. Combining disconnected scriptlet blocks produces
-; invalid JavaScript and causes the parser to return an error tree with no
-; highlights.
 (directive
   (code) @injection.content
   (#set! injection.language "javascript"))

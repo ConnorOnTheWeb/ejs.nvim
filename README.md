@@ -195,12 +195,15 @@ This tells Neovim to use the `embedded_template` parser (from
 - `javascript` into `(code)` nodes that are children of `(directive)` nodes (`<% %>` scriptlet blocks)
 - `javascript` into `(code)` nodes that are children of `(output_directive)` nodes (`<%= %>` and `<%- %>` output blocks)
 
-The HTML injection uses `#set! injection.combined` so that all `(content)`
-fragments are merged into a single virtual HTML document for consistent
-highlighting. The JavaScript injections do not use `injection.combined` --
-each `(code)` block is parsed independently, because concatenating disconnected
-scriptlet blocks rarely produces valid JavaScript and would cause the parser to
-return an error tree with no highlights.
+The HTML injection does not use `injection.combined`. With combined injection,
+Neovim builds a single virtual document from all `(content)` fragments and
+then maps CSS sub-injection positions back through two offset layers, which
+causes CSS highlights inside `<style>` blocks to land at wrong buffer positions.
+Without combined, each `(content)` fragment is its own HTML parse. A `<style>`
+block with no EJS tags inside (the common case) lives entirely within one
+fragment, giving the HTML parser a complete element to inject CSS into
+correctly. The JavaScript injections also do not use `injection.combined` for
+the same reason: each `(code)` block is parsed as an independent JS fragment.
 
 ### LSP
 

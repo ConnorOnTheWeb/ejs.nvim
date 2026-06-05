@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-06-05
+
+### Fixed
+
+- CSS inside `<style>` blocks was not highlighted despite the CSS parser being
+  active. The cause was `#set! injection.combined` on the HTML injection.
+  Combined injection causes Neovim to merge all `(content)` fragments into a
+  virtual document, then map CSS sub-injection positions back through two offset
+  layers (virtual HTML document to virtual EJS content document to real buffer).
+  That double mapping misaligns most CSS capture ranges, so only short tokens
+  like hex color literals (where the offset error still overlaps the right
+  characters) survived. Removed `injection.combined` from the HTML injection so
+  each `(content)` fragment is parsed as an independent HTML document. A
+  `<style>` block with no EJS tags inside it lives in a single complete
+  fragment, giving the HTML parser a well-formed element to inject CSS into with
+  a single-layer position mapping that works correctly.
+
 ## [1.0.4] - 2026-06-05
 
 ### Added

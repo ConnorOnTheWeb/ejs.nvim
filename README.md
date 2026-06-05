@@ -111,7 +111,9 @@ your config. `setup()` is idempotent and safe to call multiple times.
 ### Post-install: install the Tree-sitter parser
 
 After installing the plugin, install the required Tree-sitter parsers inside
-Neovim:
+Neovim. The `:TSInstall` command is provided by nvim-treesitter. If you do not
+have nvim-treesitter, parsers must be compiled from source (see each parser's
+GitHub repo). With nvim-treesitter installed:
 
 ```
 :TSInstall embedded_template html css
@@ -203,7 +205,7 @@ the HTML parser to immediately enter error recovery and produce only ERROR
 nodes. With `injection.combined` the HTML parser sees a coherent document,
 produces proper element nodes including `style_element`, and its own injection
 queries fire correctly to inject CSS inside `<style>` blocks. The JavaScript
-injections do not use `injection.combined` -- each `(code)` block is parsed as
+injections do not use `injection.combined`. Each `(code)` block is parsed as
 an independent JS fragment, because concatenating disconnected scriptlet blocks
 rarely produces valid JavaScript.
 
@@ -218,8 +220,8 @@ CSS rule. This guarantees the injection is available regardless of what the
 system's HTML queries contain.
 
 The `css` Tree-sitter parser binary must be installed for this to work. If CSS
-is not highlighting, run `:checkhealth ejs` -- a missing `css` parser will show
-as a warning -- then run `:TSInstall css`.
+is not highlighting, run `:checkhealth ejs` (a missing `css` parser will show
+as a warning) then run `:TSInstall css`.
 
 ### LSP
 

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-06-05
+
+### Fixed
+
+- Restored `#set! injection.combined` on the HTML injection, reverting the
+  1.0.5 change. Without `injection.combined`, each `(content)` fragment is
+  parsed as an independent HTML document. Fragments that start mid-document
+  (after a `</script>` closing tag, for example) cause the HTML parser to enter
+  error recovery immediately, producing only ERROR nodes. No `style_element`
+  node is ever produced, so the HTML parser's own CSS injection query never
+  fires and CSS gets no highlighting at all. With `injection.combined` the
+  fragments are merged into a coherent virtual HTML document, the HTML parser
+  produces proper element nodes, and the CSS injection chain works correctly.
+  The earlier claim that `injection.combined` caused CSS position misalignment
+  was incorrect -- it was based on a misreading of Neovim's nested injection
+  offset handling.
+
 ## [1.0.5] - 2026-06-05
 
 ### Fixed

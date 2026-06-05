@@ -207,30 +207,19 @@ injections do not use `injection.combined` -- each `(code)` block is parsed as
 an independent JS fragment, because concatenating disconnected scriptlet blocks
 rarely produces valid JavaScript.
 
-#### CSS injection and nvim-treesitter load order
+#### CSS inside `<style>` blocks
 
-CSS inside `<style>` blocks works via a three-level injection chain:
-`embedded_template` -> `html` -> `css`. The CSS injection rule lives in
-`nvim-treesitter/runtime/queries/html_tags/injections.scm`, which is only
-added to Neovim's runtimepath when nvim-treesitter loads. Because ejs.nvim
-loads on `FileType ejs`, nvim-treesitter may not have loaded yet at that point.
+CSS highlighting works via a three-level injection chain:
+`embedded_template` -> `html` -> `css`. The HTML parser must find a
+`style_element` node and inject CSS into its content.
 
-To guarantee the CSS injection chain is available, `lua/ejs/treesitter.lua`
-calls:
+The plugin ships `queries/html/injections.scm` with a `style_element` ->
+CSS rule. This guarantees the injection is available regardless of what the
+system's HTML queries contain.
 
-```lua
-pcall(function()
-  require('lazy').load({ plugins = { 'nvim-treesitter' } })
-end)
-```
-
-This forces nvim-treesitter into runtimepath before the embedded_template
-parser registers. The call is wrapped in `pcall` so it is a no-op when
-lazy.nvim or nvim-treesitter are not present.
-
-Without nvim-treesitter installed, the `html_tags/injections.scm` file is not
-available anywhere in the runtimepath and CSS highlighting will not work. This
-is the only feature of ejs.nvim that genuinely requires nvim-treesitter.
+The `css` Tree-sitter parser binary must be installed for this to work. If CSS
+is not highlighting, run `:checkhealth ejs` -- a missing `css` parser will show
+as a warning -- then run `:TSInstall css`.
 
 ### LSP
 

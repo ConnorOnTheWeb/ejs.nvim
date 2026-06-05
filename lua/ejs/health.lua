@@ -46,7 +46,7 @@ function M.check()
     )
   end
 
-  -- 6. html-lsp (vscode-html-language-server)
+  -- 5. html-lsp (vscode-html-language-server)
   if vim.fn.executable('vscode-html-language-server') == 1 then
     vim.health.ok('vscode-html-language-server found on PATH (html-lsp)')
   else
@@ -56,7 +56,7 @@ function M.check()
     )
   end
 
-  -- 7. typescript-language-server (backing ts_ls)
+  -- 6. typescript-language-server (backing ts_ls)
   if vim.fn.executable('typescript-language-server') == 1 then
     vim.health.ok('typescript-language-server found on PATH (ts_ls)')
   else
@@ -66,7 +66,7 @@ function M.check()
     )
   end
 
-  -- 8. LuaSnip (optional, warning only)
+  -- 7. LuaSnip (optional, warning only)
   local luasnip_ok = pcall(require, 'luasnip')
   if luasnip_ok then
     vim.health.ok('LuaSnip is installed; EJS snippets will be loaded')

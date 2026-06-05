@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2026-06-05
+
+### Changed
+
+- Removed the `pcall(require('lazy').load({ plugins = { 'nvim-treesitter' } }))`
+  call that was added in 1.0.8. That change was based on a wrong diagnosis: the
+  actual cause of CSS not highlighting was that the `css` Tree-sitter parser
+  binary was not installed, not a load-order issue. The call was unnecessary and
+  has been removed.
+- Simplified the README CSS section to accurately describe the real requirement:
+  the `css` parser binary must be installed via `:TSInstall css`.
+- Fixed comment numbering in `lua/ejs/health.lua` (checks were numbered 6, 7,
+  8 after inserting two new checks in 1.0.4 without renumbering the rest).
+
 ## [1.0.8] - 2026-06-05
 
 ### Fixed

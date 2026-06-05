@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-06-05
+
+### Fixed
+
+- CSS inside `<style>` blocks was still not highlighting. The root cause was a
+  load-order issue: ejs.nvim loads on `FileType ejs`, but nvim-treesitter (which
+  contains the `html_tags/injections.scm` file with the `style_element` -> CSS
+  rule) had not yet been loaded at that point, so its `runtime/` directory was
+  not in runtimepath when the embedded_template parser began processing the
+  buffer. Added a `pcall(require('lazy').load(...))` call in
+  `lua/ejs/treesitter.lua` to force nvim-treesitter to load before the parser
+  is registered. The call is wrapped in `pcall` so it is a no-op on setups
+  that do not use lazy.nvim or do not have nvim-treesitter installed.
+
 ## [1.0.7] - 2026-06-05
 
 ### Fixed

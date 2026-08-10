@@ -4,6 +4,7 @@ local completion = require('ejs.completion')
 local include = require('ejs.include')
 local diagnostics = require('ejs.diagnostics')
 local fold = require('ejs.fold')
+local region = require('ejs.region')
 
 --- Builds a throwaway project:
 ---   <tmp>/package.json
@@ -33,6 +34,21 @@ local function open(path, lines)
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   end
   return bufnr
+end
+
+--- Runs `fn` with `vim.treesitter.get_parser` failing, so `ejs.region` falls
+--- back to its text scan. `:checkhealth ejs` reports a missing parser as an
+--- Error, but the plugin still loads, so that path has to work too.
+local function without_parser(fn)
+  local original = vim.treesitter.get_parser
+  vim.treesitter.get_parser = function()
+    error('no embedded_template parser')
+  end
+  local ok, err = pcall(fn)
+  vim.treesitter.get_parser = original
+  if not ok then
+    error(err, 0)
+  end
 end
 
 describe('completion context', function()
@@ -83,6 +99,40 @@ describe('completion context', function()
 
   it('ignores an ordinary string that is not an include argument', function()
     falsy(completion.get_context("<% const s = 'partials/he"))
+  end)
+
+  it('does not offer paths for include() typed in body text', function()
+    local dir = fixture()
+    local line = "<p>Call include('"
+    local bufnr = open(dir .. '/views/index.ejs', { line })
+    falsy(completion.get_context(line, { bufnr = bufnr, row = 1 }))
+  end)
+
+  it('offers paths for include() inside a tag', function()
+    local dir = fixture()
+    local line = "<%- include('partials/he"
+    local bufnr = open(dir .. '/views/index.ejs', { line })
+    local ctx = completion.get_context(line, { bufnr = bufnr, row = 1 })
+    truthy(ctx, 'an unterminated tag is still a code region while it is being typed')
+    eq('include', ctx.kind)
+    eq('he', ctx.keyword)
+  end)
+
+  it('offers paths for include() inside a tag with no parser available', function()
+    local dir = fixture()
+    local line = "<%- include('partials/he"
+    local bufnr = open(dir .. '/views/index.ejs', { line })
+    without_parser(function()
+      truthy(completion.get_context(line, { bufnr = bufnr, row = 1 }))
+    end)
+  end)
+
+  it('still gates the tag and keyword contexts on nothing', function()
+    -- `<%` is completed *from* markup, so those branches must stay ungated.
+    local dir = fixture()
+    local bufnr = open(dir .. '/views/index.ejs', { '<p><%' })
+    eq('tag', completion.get_context('<p><%', { bufnr = bufnr, row = 1 }).kind)
+    eq('keyword', completion.get_context('<p>ejsi', { bufnr = bufnr, row = 1 }).kind)
   end)
 end)
 
@@ -159,12 +209,99 @@ describe('include resolution', function()
       '<p>x</p>',
       '<%- include("partials/nav", { active: true }) %>',
     })
-    local found = include.find_includes(bufnr)
+    local found = include.find_includes(bufnr, { include_comments = false })
     eq(2, #found)
     eq('partials/head', found[1].raw)
     eq(0, found[1].lnum)
     eq('partials/nav', found[2].raw)
     eq(2, found[2].lnum)
+  end)
+end)
+
+--------------------------------------------------------------------------------
+-- Code regions
+--
+-- An include() call is only ever inside an EJS tag. These run every case twice:
+-- once through the Tree-sitter path and once with the parser forced
+-- unavailable, because both have to give the same answer or they will drift.
+--------------------------------------------------------------------------------
+
+--- Number of include() calls found in `lines`, under both region backends.
+--- Fails when the two disagree, since that is the drift these guard against.
+local function include_count(lines, opts)
+  local dir = fixture()
+  local bufnr = open(dir .. '/views/index.ejs', lines)
+  local parsed = #include.find_includes(bufnr, opts)
+  local scanned
+  without_parser(function()
+    scanned = #include.find_includes(bufnr, opts)
+  end)
+  eq(parsed, scanned, 'Tree-sitter and the text-scan fallback disagree')
+  return parsed
+end
+
+describe('code regions', function()
+  local NOT_COMMENTS = { include_comments = false }
+
+  it('ignores an include() in prose', function()
+    eq(0, include_count({ "<p>Plain <code>include('partials/head')</code> opens it.</p>" }, NOT_COMMENTS))
+  end)
+
+  it('ignores an include() in body text', function()
+    eq(0, include_count({ '<p>Call include("layouts/base") to nest.</p>' }, NOT_COMMENTS))
+  end)
+
+  it('ignores an include() inside an HTML comment', function()
+    eq(0, include_count({ "<!-- old: include('partials/legacy') -->" }, NOT_COMMENTS))
+  end)
+
+  it('ignores an include() inside the <%% literal escape', function()
+    eq(0, include_count({ "<%% include('partials/head') %>" }, NOT_COMMENTS))
+  end)
+
+  it('finds an include in each tag type', function()
+    eq(1, include_count({ "<% include('partials/head') %>" }, NOT_COMMENTS))
+    eq(1, include_count({ "<%= include('partials/head') %>" }, NOT_COMMENTS))
+    eq(1, include_count({ "<%- include('partials/head') %>" }, NOT_COMMENTS))
+    eq(1, include_count({ "<%_ include('partials/head') _%>" }, NOT_COMMENTS))
+  end)
+
+  it('finds an include in a code region spanning several lines', function()
+    eq(1, include_count({ '<%', "  include('partials/head')", '%>' }, NOT_COMMENTS))
+  end)
+
+  it('finds the real include in a file that also mentions one in prose', function()
+    eq(
+      1,
+      include_count({
+        "<p>Plain <code>include('partials/head')</code> opens it.</p>",
+        "<%- include('partials/head') %>",
+      }, NOT_COMMENTS)
+    )
+  end)
+
+  it('excludes a <%# %> comment for diagnostics and keeps it for navigation', function()
+    local lines = { "<%# include('partials/old') %>" }
+    eq(0, include_count(lines, { include_comments = false }))
+    eq(1, include_count(lines, { include_comments = true }))
+  end)
+
+  it('still finds an include in a tag the author has not closed yet', function()
+    eq(1, include_count({ "<%- include('partials/head')" }, NOT_COMMENTS))
+  end)
+
+  it('requires the caller to state whether comments count', function()
+    local dir = fixture()
+    local bufnr = open(dir .. '/views/index.ejs', { "<%- include('partials/head') %>" })
+    falsy(pcall(include.find_includes, bufnr))
+    falsy(pcall(region.code_regions, bufnr, {}))
+  end)
+
+  it('still reports an include inside a JavaScript string, which is real code', function()
+    -- The gate answers "is this inside a tag", and this is. Excluding it would
+    -- mean parsing JS string and comment syntax, which is the guard
+    -- enumeration this fix exists to avoid.
+    eq(1, include_count({ [[<% const s = "include('partials/head')" %>]] }, NOT_COMMENTS))
   end)
 end)
 
@@ -195,6 +332,28 @@ describe('diagnostics', function()
     local dir = fixture()
     local bufnr = open(dir .. '/views/index.ejs', { '<%# just a note %>' })
     eq({}, diagnostics.collect(bufnr))
+  end)
+
+  it('stays quiet for include()-shaped text that is not code', function()
+    local dir = fixture()
+    local bufnr = open(dir .. '/views/index.ejs', {
+      "<p>Plain <code>include('partials/nope')</code> opens it.</p>",
+      '<p>Call include("layouts/nope") to nest.</p>',
+      "<!-- old: include('partials/nope') -->",
+      "<%# include('partials/nope') %>",
+    })
+    eq({}, diagnostics.collect(bufnr))
+  end)
+
+  it('still reports a broken include sitting next to prose that mentions one', function()
+    local dir = fixture()
+    local bufnr = open(dir .. '/views/index.ejs', {
+      "<p>Call include('partials/nope') to nest.</p>",
+      "<%- include('partials/nope') %>",
+    })
+    local found = diagnostics.collect(bufnr)
+    eq(1, #found)
+    eq(1, found[1].lnum, 'the diagnostic belongs to the tag, not the prose')
   end)
 end)
 

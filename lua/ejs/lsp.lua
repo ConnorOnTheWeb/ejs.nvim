@@ -1,21 +1,10 @@
 local M = {}
 
---- Returns true when the cursor is inside a Tree-sitter (code) node,
---- meaning it is inside a <% %> EJS tag. Returns false for (content) nodes
---- (plain HTML) and when no parser is active.
+--- "Is the cursor inside a <% %> tag?" now lives in lua/ejs/region.lua
+--- alongside the range form of the same question, so there is one answer
+--- rather than a copy per caller.
 local function cursor_in_code_node()
-  local node = vim.treesitter.get_node()
-  if not node then
-    return false
-  end
-  local n = node
-  while n do
-    if n:type() == 'code' then
-      return true
-    end
-    n = n:parent()
-  end
-  return false
+  return require('ejs.region').cursor_in_code_node()
 end
 
 --- Attach LSP clients to a single EJS buffer.

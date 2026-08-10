@@ -25,7 +25,7 @@ function source:get_completions(context, callback)
   local completion = require('ejs.completion')
 
   local row, col = context.cursor[1], context.cursor[2]
-  local ctx = completion.get_context(context.line:sub(1, col))
+  local ctx = completion.get_context(context.line:sub(1, col), { bufnr = context.bufnr, row = row })
 
   local items = {}
   local incomplete = false

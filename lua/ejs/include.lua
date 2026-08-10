@@ -188,9 +188,18 @@ function M.candidates(prefix, bufnr)
 end
 
 --- Every `include()` call in a buffer, with byte positions of the path.
+---
+--- Only calls inside an EJS code region count. `include(`-shaped text in
+--- prose, in body copy or inside an `<!-- -->` comment is not a call, and the
+--- pattern alone cannot tell the difference — see lua/ejs/region.lua.
 ---@param bufnr integer
+---@param opts table `{ include_comments = boolean }`, required: whether a call
+---            inside `<%# %>` counts. Diagnostics say no, navigation says yes.
 ---@return table[] includes { raw, lnum (0-indexed), col, end_col }
-function M.find_includes(bufnr)
+function M.find_includes(bufnr, opts)
+  local region = require('ejs.region')
+  local regions = region.code_regions(bufnr, opts)
+
   local includes = {}
   for lnum, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
     local from = 1
@@ -199,14 +208,16 @@ function M.find_includes(bufnr)
       if not s then
         break
       end
-      -- Position of the path text itself, inside the quotes.
-      local quote_at = line:find('[\'"]', s)
-      table.insert(includes, {
-        raw = raw,
-        lnum = lnum - 1,
-        col = quote_at,
-        end_col = quote_at + #raw,
-      })
+      if region.contains(regions, lnum - 1, s - 1) then
+        -- Position of the path text itself, inside the quotes.
+        local quote_at = line:find('[\'"]', s)
+        table.insert(includes, {
+          raw = raw,
+          lnum = lnum - 1,
+          col = quote_at,
+          end_col = quote_at + #raw,
+        })
+      end
       from = e + 1
     end
   end
@@ -228,7 +239,10 @@ function M.goto_definition()
   local cursor = vim.api.nvim_win_get_cursor(0)
   local lnum, col = cursor[1] - 1, cursor[2] + 1
 
-  for _, include in ipairs(M.find_includes(bufnr)) do
+  -- Commented-out includes are navigable on purpose: jumping to one only
+  -- answers where the cursor already is, so it cannot become noise the way a
+  -- warning about the same include would.
+  for _, include in ipairs(M.find_includes(bufnr, { include_comments = true })) do
     if include.lnum == lnum and col >= include.col and col <= include.end_col then
       local resolved = M.resolve(include.raw, bufnr)
       if not resolved then

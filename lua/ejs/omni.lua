@@ -23,8 +23,11 @@ function M.omnifunc(findstart, base)
   local completion = require('ejs.completion')
 
   if findstart == 1 then
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    local ctx = completion.get_context(vim.api.nvim_get_current_line():sub(1, col))
+    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    local ctx = completion.get_context(vim.api.nvim_get_current_line():sub(1, col), {
+      bufnr = vim.api.nvim_get_current_buf(),
+      row = row,
+    })
     if not ctx then
       pending = nil
       return -3

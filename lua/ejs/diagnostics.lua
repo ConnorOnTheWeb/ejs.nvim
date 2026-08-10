@@ -64,7 +64,10 @@ function M.collect(bufnr)
   local include = require('ejs.include')
   local diagnostics = {}
 
-  for _, entry in ipairs(include.find_includes(bufnr)) do
+  -- A warning about an include you commented out is noise you didn't ask for,
+  -- so `<%# %>` is excluded here and only here — `:EjsDefinition` still
+  -- follows one.
+  for _, entry in ipairs(include.find_includes(bufnr, { include_comments = false })) do
     if entry.raw ~= '' then
       local resolved = include.resolve(entry.raw, bufnr)
       if not resolved then

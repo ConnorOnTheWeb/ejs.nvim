@@ -28,7 +28,10 @@ end
 
 function source:complete(params, callback)
   local completion = require('ejs.completion')
-  local ctx = completion.get_context(params.context.cursor_before_line)
+  local ctx = completion.get_context(params.context.cursor_before_line, {
+    bufnr = params.context.bufnr,
+    row = params.context.cursor.row,
+  })
   if not ctx then
     return callback({ items = {}, isIncomplete = false })
   end

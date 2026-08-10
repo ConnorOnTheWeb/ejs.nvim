@@ -5,6 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-08-10
+
+### Fixed
+
+- **`include()` was detected anywhere in the buffer, not only inside EJS
+  tags.** `<p>Plain <code>include('partials/head')</code> opens it.</p>`
+  reported an unresolved include, as did `include("layouts/base")` in body
+  text, `include('partials/legacy')` inside an `<!-- -->` comment, and
+  `include('partials/old')` inside a `<%# %>` comment. Any `include()`-shaped
+  text in a template produced a warning.
+
+  The cause was scope, not the pattern. `find_includes` iterated every line
+  and applied `INCLUDE_PATTERN` with no notion of where the `<% %>` regions
+  are. Tightening the pattern was not the answer: a guard has to enumerate the
+  ways text can fail to be code — prose, comments, attribute values, script
+  bodies — and that set has no end. The sibling projects reached the same
+  conclusion from the other direction; `connorontheweb/alpinejs-tools` v1.7.3
+  abandoned the guard route after two attempts and records why, and
+  `connorontheweb/ejs-colorizer` v2.3.2 fixes the identical bug in its own
+  `findIncludes`. The invariant that settles it is that an `include()` call is
+  only ever inside an EJS tag.
+
+  Regions now come from the Tree-sitter parse tree, in a new
+  `lua/ejs/region.lua`. That is the same structural question `lua/ejs/lsp.lua`
+  was already asking with `vim.treesitter.get_node()` to route
+  `documentHighlight`, in the cursor form rather than the range form; that
+  private copy is gone and it calls the shared helper now.
+
+- **This was never diagnostics-only.** `find_includes` also drives
+  `:EjsDefinition`, and the completion path had the same root cause by a
+  different route: `get_context` decided from the line prefix alone, so typing
+  `include('` in body text offered partial paths. Milder — it offers rather
+  than warns — but the same bug, and it now consults the same helper.
+  Completion is where this plugin does better than the extension, which left
+  its own completion provider uncovered because its block scanner cannot see
+  into a tag the author has not closed yet. The parse tree can: an unterminated
+  `<%` yields a `code` node running to the end of the buffer, so paths are
+  still offered mid-edit, which is the only moment completion ever fires.
+
+### Changed
+
+- **`<%# %>` comments are the one place the features deliberately disagree.**
+  A commented-out `include()` no longer produces a missing-path warning,
+  because a warning about an include you commented out is noise you didn't ask
+  for. `:EjsDefinition` and completion still follow it, because those only
+  answer where the cursor already is. `gf` was never affected either way — it
+  goes through `includeexpr` and resolves `<cfile>` directly, without
+  consulting `find_includes` at all.
+
+  The grammar makes this nearly free: `<%# x %>` parses as `comment_directive`
+  with a `(comment)` child, not `(code)`, so the region query decides it
+  rather than a special case. `include_comments` is a required option on
+  `code_regions` and `find_includes` with no default, so a new caller has to
+  state its intent instead of silently inheriting the wrong one — two copies
+  drifting apart is how this class of bug survives.
+
+- **A missing `embedded_template` parser falls back to a text scan for
+  `<% %>` spans**, rather than reporting nothing. `:checkhealth ejs` treats
+  the missing parser as an Error, but the plugin still loads and everything
+  else still works, and `find_includes` drives `:EjsDefinition` as well as the
+  diagnostic — so reporting nothing would have turned a false-positive bug
+  into a missing feature. The fallback fixes all four reported cases on its
+  own, since none of them contain a `<%` at all. It is one branch of one
+  function returning the same shape as the other, and the tests run every case
+  through both.
+
+- **`lua/ejs/fold.lua` was left alone.** `line_delta` models the same "only
+  text inside `<% %>` counts" rule, but it computes per-line deltas with
+  string and comment awareness *inside* the code, which a span helper does not
+  provide — it would still have to re-scan. Rewriting it on top of
+  `region.lua` would have risked the folding behaviour for no user-visible
+  gain.
+
+### Known
+
+- **`<% const s = "include('x')" %>` is still reported.** An `include()` inside
+  a JavaScript string sits inside a genuine EJS tag, so the gate admits it.
+  Excluding it would mean parsing JS string and comment syntax — exactly the
+  guard enumeration this fix rejects. There is a test pinning this, so the
+  boundary is deliberate rather than forgotten.
+
+### Verified
+
+- 54 tests, `nvim -l tests/run.lua`, up from 37. Covering each of the four
+  reported cases (0 matches, previously 1 each), a genuine broken include in
+  `<%- %>` and a working include (still flagged and still clean), one include
+  in each of `<% %>`, `<%= %>`, `<%- %>` and `<%_ %>`, a `<%# %>` include
+  under both settings of the comment flag (0 for diagnostics, 1 for
+  navigation), a code region spanning several lines, the `<%%` literal escape,
+  prose and a real include in the same buffer (1 match, not 2, and on the
+  right line), an unterminated tag, completion refusing `include('` in body
+  text while still offering it inside a tag, and both region backends asserted
+  to agree on every one of those.
+
 ## [1.1.0] - 2026-08-09
 
 Brings the plugin up to the feature set of `connorontheweb/ejs-colorizer`
@@ -97,7 +191,7 @@ that heuristic can.
   open, and the per-line depths are cached per `changedtick`.
 
 - **A test suite**, run with `nvim -l tests/run.lua` and needing no test
-  framework or plugin dependencies. 31 tests covering completion contexts,
+  framework or plugin dependencies. 37 tests covering completion contexts,
   include resolution against a real fixture tree, diagnostics and folding.
 
 ### Changed

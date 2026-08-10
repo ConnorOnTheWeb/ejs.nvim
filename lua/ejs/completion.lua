@@ -138,10 +138,35 @@ M.scaffolds = {
 -- Context detection
 --------------------------------------------------------------------------------
 
+--- True when a 0-indexed column on the cursor line is inside an EJS code
+--- region, or when there is no buffer to ask about (the pure-string form).
+---
+--- Comments count here for the same reason navigation follows them: completion
+--- offers rather than warns, and it only ever fires where the cursor already
+--- is. The tag being completed is usually still unterminated, which the region
+--- helper handles — an unclosed `<%` runs to the end of the buffer.
+---@param opts table?
+---@param col integer 0-indexed
+---@return boolean
+local function in_code_region(opts, col)
+  if not opts or not opts.bufnr or not opts.row then
+    return true
+  end
+  local region = require('ejs.region')
+  local regions = region.code_regions(opts.bufnr, { include_comments = true })
+  return region.contains(regions, opts.row - 1, col)
+end
+
 --- Determines what should be completed at the cursor.
+---
+--- `opts` carries the buffer position, which only the include branch needs:
+--- an `include()` call is only ever inside an EJS tag, so `include('` typed in
+--- body text must not offer partial paths. Without `opts` the line alone
+--- decides, which is what the pure-string tests exercise.
 ---@param line_to_cursor string
+---@param opts table? `{ bufnr = integer, row = integer (1-indexed) }`
 ---@return table? ctx { kind, keyword, start_col }
-function M.get_context(line_to_cursor)
+function M.get_context(line_to_cursor, opts)
   local cursor_col = #line_to_cursor
 
   -- Inside an include() path string, which may itself sit inside a `<%- %>`
@@ -163,6 +188,9 @@ function M.get_context(line_to_cursor)
   if quote and quote_start then
     local before = line_to_cursor:sub(1, quote_start - 1)
     if before:match('include%s*%(%s*$') then
+      if not in_code_region(opts, quote_start - 1) then
+        return nil
+      end
       local typed = line_to_cursor:sub(quote_start + 1)
       -- Only the segment after the last `/` is replaced, so navigating into a
       -- directory does not re-insert the part already typed.

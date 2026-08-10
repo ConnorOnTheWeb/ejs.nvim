@@ -200,6 +200,19 @@ That resolution backs four things: completion inside the quotes, `gf`
 matches no file. `:checkhealth ejs` reports which views root, if any, was
 found for the current buffer.
 
+An `include()` call is only recognised inside an EJS tag. `include('…')`
+written in prose, in body text or inside an `<!-- -->` comment is not a call,
+so it produces no diagnostic and no completion — the code regions come from
+the Tree-sitter parse tree (`lua/ejs/region.lua`), with a text scan for
+`<% %>` spans as the fallback when the `embedded_template` parser is not
+installed.
+
+`<%# %>` comments are the one place the features deliberately disagree. An
+`include()` commented out with `<%#` produces no missing-path warning, because
+a warning about an include you commented out is noise you didn't ask for.
+`gf`, `:EjsDefinition` and completion still work on it, because those only
+answer where the cursor already is.
+
 ## Comments
 
 `ftplugin/ejs.lua` sets `commentstring` to `<%# %s %>`. Neovim resolves the
@@ -333,7 +346,10 @@ nvim -l tests/run.lua
 ```
 
 No test framework and no plugin dependencies. Include resolution is tested
-against a real temporary project tree rather than mocks.
+against a real temporary project tree rather than mocks. The code-region tests
+run every case twice — once through the Tree-sitter parse tree and once with
+the parser forced unavailable — because both backends have to give the same
+answer or they will drift apart.
 
 ## License
 

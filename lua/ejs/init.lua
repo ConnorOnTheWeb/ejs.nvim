@@ -31,6 +31,45 @@ function M.setup(opts)
   if _config.snippets then
     require('ejs.snippets').setup()
   end
+
+  if _config.completion.cmp then
+    require('ejs.cmp').setup()
+  end
+
+  if _config.completion.blink then
+    require('ejs.blink').setup()
+  end
+
+  if _config.completion.omni then
+    require('ejs.omni').setup()
+  end
+
+  if _config.diagnostics then
+    require('ejs.diagnostics').setup()
+  end
+
+  if _config.folding then
+    require('ejs.fold').setup()
+  end
+
+  if _config.hover then
+    require('ejs.hover').setup()
+  end
+end
+
+--- Documentation for the EJS delimiter under the cursor. Returns false when
+--- the cursor is not on one, so a custom `K` mapping can fall through.
+---@return boolean handled
+function M.hover()
+  return require('ejs.hover').hover()
+end
+
+--- Jumps to the file referenced by the `include()` under the cursor.
+--- Returns false when the cursor is not on an include path, so a custom
+--- mapping can fall through.
+---@return boolean handled
+function M.goto_definition()
+  return require('ejs.include').goto_definition()
 end
 
 return M

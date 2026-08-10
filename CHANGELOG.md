@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-09
+
+Brings the plugin up to the feature set of `connorontheweb/ejs-colorizer`
+v2.3.1 — until now it covered highlighting, LSP attachment and snippets, and
+none of the template navigation the extension had gained since v2.1.0 — and
+adds completion support for every major Neovim completion engine.
+
+Three of the extension's features are deliberately left out, because in
+Neovim they belong to other tools: Emmet expansion, Prettier formatting
+(`conform.nvim` or `formatprg`), and the Outline provider (LSP symbols or
+`aerial.nvim`). The extension's joined-program JavaScript syntax check is
+also skipped: `ts_ls` is already attached to `<% %>` regions by
+`lua/ejs/lsp.lua` and reports real syntax errors with better positions than
+that heuristic can.
+
+### Added
+
+- **`include()` path completion** inside the quotes, with directories
+  offered with a trailing slash and re-triggering so navigating into one
+  keeps completing. Paths are offered without the `.ejs` extension, the form
+  that actually appears in templates.
+
+- **`gf` and `:EjsDefinition` on include paths.** `ftplugin/ejs.lua` sets
+  `suffixesadd` and an `includeexpr`, so plain `gf` on
+  `include('partials/head')` opens `views/partials/head.ejs` — resolving the
+  missing extension and searching the views root, neither of which `gf` can
+  do on its own.
+
+- **Include resolution that handles both conventions** (`lua/ejs/include.lua`):
+  file-relative first, matching EJS's own runtime and `ejs-colorizer`'s
+  `includeResolver.ts`, then the views root — the nearest ancestor directory
+  named `views`, else `<project root>/views`, mirroring how `express-map`
+  derives it from `app.set('views', …)`. A leading `/` resolves against the
+  views root only. `.ejs`, `.html` and `.htm` are all tried, and
+  `include('partials')` finds `partials/index.ejs`.
+
+- **Diagnostics** for an `include()` path that matches no file (the message
+  names the directories that were searched), and for a `<%# %>` comment that
+  ends early. The latter is the case where the commented-out text itself
+  contains a tag, so EJS's scan to the first `%>` closes the comment there
+  and the remainder leaks back into the template as markup — the extension's
+  v2.2.3 diagnostic.
+
+- **Hover documentation on `K`** for the delimiter under the cursor
+  (extension `hoverProvider.ts`). The distinctions worth documenting are the
+  ones that are not guessable from the syntax: `<%=` escapes its output and
+  `<%-` does not, which is the XSS-relevant difference, and `%>`, `-%>` and
+  `_%>` differ in what whitespace they consume. Openers are matched
+  longest-first so `<%#` is never read as `<%` with a stray `#`. `K` in an
+  EJS buffer already belongs to html-lsp or ts_ls, so the mapping answers
+  only on a delimiter and hands off everywhere else.
+
+- **The closing delimiters `-%>`, `_%>` and the v6 `%%>` literal escape**,
+  which were missing from the plugin entirely. `%%>` is also now a LuaSnip
+  snippet, alongside the `<%%` added above.
+
+- **Completion for EJS tags and block scaffolds**, served to nvim-cmp,
+  blink.cmp and Neovim's built-in completion from one core. This includes
+  the v6 `<%%` literal escape (extension v2.2.7), which was missing from the
+  snippets entirely, and the `ejsif` / `ejsfor` / `ejsinclude` / `ejspage`
+  scaffolds — previously LuaSnip-only, and therefore invisible to anyone
+  using a different snippet engine or none.
+
+- **blink.cmp support**, registered automatically for the `ejs` filetype via
+  its runtime API (blink >= v1.6). Verified against blink's own source that
+  this appends to a separate per-filetype list and cannot displace the
+  sources you configured yourself.
+
+- **A complete-function** (`completion.omni = true`) for Neovim 0.12's
+  built-in completion, mini.completion and coq_nvim. On 0.12 it is appended
+  to `'complete'` as `FEjsCompleteFunc` rather than claiming `omnifunc`,
+  which in an EJS buffer is already held by html-lsp or ts_ls.
+
+- **`commentstring`.** `.ejs` had none at all, so `gc` in an EJS buffer
+  reported an empty `commentstring` rather than commenting anything.
+  `ftplugin/ejs.lua` now sets `<%# %s %>`; because Neovim resolves the comment
+  string from the deepest Tree-sitter tree at the cursor, and this plugin
+  already injects `html` and `javascript`, `gc` produces `<!-- -->` in markup
+  and `//` inside `<% %>` with no further work. This is deliberately
+  region-aware rather than always emitting `<%# %>` like the extension's
+  comment toggle does, because that is how Neovim behaves in every other
+  embedded language.
+
+- **Folding for control-flow blocks** (`lua/ejs/fold.lua`). Tree-sitter
+  cannot express these: `<% if (x) { %>` and `<% } %>` are two independent
+  `directive` nodes with the HTML between them belonging to neither, so no
+  single node spans the block. Brace depth inside the code regions is what
+  actually delimits it, counted with string, comment and `<%%`-escape
+  awareness so `<% const s = "}" %>` does not unbalance the file. Folds start
+  open, and the per-line depths are cached per `changedtick`.
+
+- **A test suite**, run with `nvim -l tests/run.lua` and needing no test
+  framework or plugin dependencies. 31 tests covering completion contexts,
+  include resolution against a real fixture tree, diagnostics and folding.
+
+### Changed
+
+- **`config.snippets` now controls LuaSnip only**; the new
+  `config.completion` table controls the completion source, which offers the
+  same tags and scaffolds independently. LuaSnip is no longer reported as a
+  warning by `:checkhealth ejs` when absent, because it is now genuinely
+  optional rather than the only way to get snippets.
+
 ## [1.0.9] - 2026-06-05
 
 ### Changed

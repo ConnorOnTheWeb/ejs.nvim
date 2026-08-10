@@ -9,7 +9,24 @@ LSP configuration, and LuaSnip snippets.
 - Tree-sitter syntax highlighting: HTML outside `<% %>` tags, JavaScript inside them
 - Language injection via `queries/embedded_template/injections.scm` using the `embedded_template` parser
 - LSP attachment: `html-lsp` for HTML portions, `ts_ls` for JavaScript portions
-- LuaSnip snippets for common EJS patterns
+- **`include()` path completion**, resolving both file-relative and
+  views-root conventions, with directory navigation
+- **`gf` and `:EjsDefinition` on include paths** — `gf` on
+  `include('partials/head')` opens `views/partials/head.ejs`, extension and
+  all
+- **Diagnostics**: `include()` paths that do not resolve to a file, and
+  `<%# %>` comments that end earlier than they look like they do
+- **Tag completion** for every EJS delimiter, including the v6 `<%%` literal
+  escape, plus block scaffolds — in nvim-cmp, blink.cmp, or Neovim's built-in
+  completion (see [Completion engines](#completion-engines))
+- **Hover documentation** on `K` for the delimiter under the cursor — what
+  separates `<%=` from `<%-`, and `%>` from `-%>` and `_%>` — falling through
+  to your LSP hover everywhere else
+- **Comment support**: `gc` produces `<%# %>` on the delimiters and, inside
+  injected regions, `<!-- -->` in markup and `//` inside `<% %>` blocks
+- **Folding** for `<% if (...) { %> … <% } %>` control-flow blocks
+- LuaSnip snippets for common EJS patterns (optional — the completion source
+  offers the same scaffolds without it)
 - `:checkhealth ejs` to verify your setup
 - Zero manual config required beyond installation
 
@@ -24,7 +41,8 @@ are absent.
 | `nvim-treesitter/nvim-treesitter` | Parser management; required for CSS highlighting in `<style>` blocks | Recommended |
 | `html-lsp` (`vscode-html-language-server`) | HTML language server | Optional |
 | `typescript-language-server` | JavaScript/TypeScript language server | Optional |
-| `L3MON4D3/LuaSnip` | Snippet engine | Optional |
+| `hrsh7th/nvim-cmp` **or** `saghen/blink.cmp` | Completion. Neither is needed if you use Neovim 0.12's built-in completion or mini.completion — set `completion.omni = true` instead | Optional |
+| `L3MON4D3/LuaSnip` | Snippet engine. Optional even for snippets: the completion source inserts the same forms itself | Optional |
 
 Install `html-lsp` and `typescript-language-server` via npm if you want LSP support:
 
@@ -134,8 +152,65 @@ require('ejs').setup({
   treesitter = true,  -- register the embedded_template parser for .ejs files
   lsp        = true,  -- attach html-lsp and ts_ls on FileType ejs
   snippets   = true,  -- load LuaSnip snippets (silently skipped if LuaSnip absent)
+
+  completion = {
+    cmp      = true,  -- register the nvim-cmp source
+    blink    = true,  -- register the blink.cmp source
+    omni     = false, -- complete-function for built-in/mini.completion/coq
+    snippets = true,  -- insert `<%= | %>` rather than a bare `<%=`
+  },
+
+  diagnostics = true, -- unresolvable include() paths, comments that end early
+  folding     = true, -- fold <% if (...) { %> ... <% } %> blocks
+  hover       = true, -- map K, falling through to LSP hover off a delimiter
 })
 ```
+
+## Completion engines
+
+One core (`lua/ejs/completion.lua`) decides what to complete; the adapters
+beside it only translate.
+
+| Engine | How it is wired | Notes |
+|---|---|---|
+| [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) | Registered automatically as the `ejs` source | Nothing to configure |
+| [blink.cmp](https://github.com/saghen/blink.cmp) | Registered automatically for the `ejs` filetype | Needs blink >= v1.6; older versions need the manual `sources.providers` entry below |
+| Neovim 0.12 built-in (`vim.o.autocomplete`) | `completion.omni = true` appends `FEjsCompleteFunc` to `'complete'` | Leaves `omnifunc` with html-lsp / ts_ls |
+| [mini.completion](https://github.com/nvim-mini/mini.completion) | `completion.omni = true` | Uses the same complete-function |
+
+```lua
+-- blink.cmp before v1.6, with completion.blink = false
+sources = {
+  default = { 'lsp', 'path', 'snippets', 'buffer', 'ejs' },
+  providers = { ejs = { name = 'EJS', module = 'ejs.blink' } },
+}
+```
+
+## include() paths
+
+`include('partials/head')` is resolved against the including file's own
+directory first — EJS's own runtime behaviour — and then against the views
+root, which is the nearest ancestor directory named `views`, or
+`<project root>/views`. A path starting with `/` is resolved against the views
+root only. The `.ejs`, `.html` and `.htm` extensions are all tried, and
+`include('partials')` will find `partials/index.ejs`.
+
+That resolution backs four things: completion inside the quotes, `gf`
+(via `includeexpr`), `:EjsDefinition`, and the diagnostic for a path that
+matches no file. `:checkhealth ejs` reports which views root, if any, was
+found for the current buffer.
+
+## Comments
+
+`ftplugin/ejs.lua` sets `commentstring` to `<%# %s %>`. Neovim resolves the
+comment string from the deepest Tree-sitter tree containing the cursor, so
+`gc` already does the right thing per region without any extra configuration:
+`<!-- -->` in markup, `//` inside a `<% %>` block, and `<%# %>` on the
+delimiters themselves and anywhere no injection applies.
+
+Note the deliberate difference from the `ejs-colorizer` VS Code extension,
+which always wraps in `<%# %>`. Region-aware commenting is how Neovim behaves
+in every other embedded language, so matching that was the better default.
 
 ## Health checks
 
@@ -250,6 +325,15 @@ vim.fs.root(bufnr, { 'package.json', '.git' }) or vim.fn.getcwd()
 
 `lua/ejs/snippets.lua` is wrapped in `pcall(require, 'luasnip')` and returns
 silently if LuaSnip is not installed. No errors are raised.
+
+## Development
+
+```sh
+nvim -l tests/run.lua
+```
+
+No test framework and no plugin dependencies. Include resolution is tested
+against a real temporary project tree rather than mocks.
 
 ## License
 

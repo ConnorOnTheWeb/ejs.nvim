@@ -40,6 +40,20 @@ function M.setup()
       { t('<%# '), i(1, 'comment'), t(' %>') }
     ),
 
+    -- <%%  Literal <% escape (EJS v6)
+    -- Expands to: <%%  (renders a literal "<%" rather than opening a tag)
+    s(
+      { trig = '<%%', name = 'EJS literal <%', dscr = 'Insert a <%% escape, which outputs a literal <%', wordTrig = false },
+      { t('<%%') }
+    ),
+
+    -- %%>  Literal %> escape (EJS v6)
+    -- Expands to: %%>  (renders a literal "%>" rather than closing a tag)
+    s(
+      { trig = '%%>', name = 'EJS literal %>', dscr = 'Insert a %%> escape, which outputs a literal %>', wordTrig = false },
+      { t('%%>') }
+    ),
+
     -- ejsinclude  Partial include
     -- Expands to: <%- include('path/to/partial', { key: value }) %>
     s(

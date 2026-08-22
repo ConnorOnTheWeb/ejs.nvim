@@ -121,10 +121,42 @@ function M.check()
 
   vim.health.start('ejs.nvim: templates')
 
-  if config.diagnostics == false then
+  local cfg = require('ejs.config')
+  if not cfg.diagnostics_enabled(config.diagnostics) then
     vim.health.info('include-path and comment diagnostics are disabled')
   else
-    vim.health.ok('include-path and comment diagnostics are enabled')
+    -- An explicit map rather than a reverse lookup over vim.diagnostic.severity:
+    -- that table carries short aliases (E, W, I, N) alongside the long names
+    -- and both directions of the mapping, so iterating it returns whichever
+    -- key `pairs` happens to reach first.
+    local SEVERITY_NAMES = {
+      [vim.diagnostic.severity.ERROR] = 'error',
+      [vim.diagnostic.severity.WARN] = 'warn',
+      [vim.diagnostic.severity.INFO] = 'info',
+      [vim.diagnostic.severity.HINT] = 'hint',
+    }
+    local function label(check)
+      local level = cfg.severity(type(config.diagnostics) == 'table' and config.diagnostics[check] or config.diagnostics)
+      return level and SEVERITY_NAMES[level] or 'off'
+    end
+    vim.health.ok(
+      ('diagnostics: missing_include = %s, broken_comment = %s'):format(
+        label('missing_include'),
+        label('broken_comment')
+      )
+    )
+    vim.health.info(
+      'JavaScript syntax errors are left to ts_ls, which is attached to <% %> regions and reports them '
+        .. 'with better positions than the extension\'s joined-program check can.'
+    )
+  end
+
+  if config.comment == false then
+    vim.health.info(
+      'gc / gcc are left alone; commentstring is still the dead branch, which is the safer static fallback'
+    )
+  else
+    vim.health.ok('gc / gcc comment each line in the style its shape calls for')
   end
 
   if config.hover == false then

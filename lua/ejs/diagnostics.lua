@@ -12,6 +12,23 @@ local M = {}
 
 local namespace = vim.api.nvim_create_namespace('ejs')
 
+--- Configured severity for one of the two checks, or nil when it is off.
+---@param check 'missing_include'|'broken_comment'
+---@return integer? severity
+local function severity_for(check)
+  local config = require('ejs.config')
+  local ok, ejs = pcall(require, 'ejs')
+  local diagnostics = ok and (ejs.get_config() or {}).diagnostics or nil
+
+  if diagnostics == nil then
+    return vim.diagnostic.severity.WARN
+  end
+  if type(diagnostics) == 'boolean' then
+    return diagnostics and vim.diagnostic.severity.WARN or nil
+  end
+  return config.severity(diagnostics[check])
+end
+
 --- Finds `<%#` comments whose content closes the tag before the author meant
 --- it to.
 ---
@@ -23,6 +40,11 @@ local namespace = vim.api.nvim_create_namespace('ejs')
 ---@return table[]
 local function broken_comments(bufnr)
   local diagnostics = {}
+
+  local level = severity_for('broken_comment')
+  if not level then
+    return diagnostics
+  end
 
   for lnum, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
     local from = 1
@@ -41,8 +63,9 @@ local function broken_comments(bufnr)
             col = start - 1,
             end_lnum = lnum - 1,
             end_col = close + 1,
-            severity = vim.diagnostic.severity.WARN,
+            severity = level,
             source = 'ejs',
+            code = 'broken-comment',
             message = 'This <%# %> comment ends early: the tag inside it closes the comment at its own %>. '
               .. 'Wrap the block in <% if (false) { %> ... <% } %> instead.',
           })
@@ -67,7 +90,10 @@ function M.collect(bufnr)
   -- A warning about an include you commented out is noise you didn't ask for,
   -- so `<%# %>` is excluded here and only here — `:EjsDefinition` still
   -- follows one.
-  for _, entry in ipairs(include.find_includes(bufnr, { include_comments = false })) do
+  local include_level = severity_for('missing_include')
+  for _, entry in ipairs(
+    include_level and include.find_includes(bufnr, { include_comments = false }) or {}
+  ) do
     if entry.raw ~= '' then
       local resolved = include.resolve(entry.raw, bufnr)
       if not resolved then
@@ -76,8 +102,9 @@ function M.collect(bufnr)
           col = entry.col,
           end_lnum = entry.lnum,
           end_col = entry.end_col,
-          severity = vim.diagnostic.severity.WARN,
+          severity = include_level,
           source = 'ejs',
+          code = 'missing-include',
           message = ("No file found for include('%s'). Looked in: %s"):format(
             entry.raw,
             table.concat(

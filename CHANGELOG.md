@@ -5,6 +5,123 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-22
+
+Catches this plugin up to `connorontheweb/ejs-colorizer` v2.5.0. Two of the
+three outstanding items needed work; the third was already done here, and
+earlier than upstream.
+
+### Added
+
+- **`gc` and `gcc` comment each line in the style its own shape calls for.**
+  `commentstring` is a single string, and an EJS template is made of five
+  distinguishable line shapes with only one of them taking `<%# … %>`:
+
+  | Where the line is | Style | Result |
+  |---|---|---|
+  | Markup or text | `<%# … %>` wrap | `<p>Hi</p>` → `<%# <p>Hi</p> %>` |
+  | One whole EJS tag | `#` marker on the tag | `<% if (a) { %>` → `<%#if (a) { %>` |
+  | Markup carrying a tag | one-line dead branch | `<p><%= x %></p>` → `<% if (false) { %>…<% } %>` |
+  | Inside a scriptlet body | `//` prefix | `const a = 1;` → `// const a = 1;` |
+  | Only a delimiter | left alone | `<%` → `<%` |
+
+  Ported from ejs-colorizer v2.5.0, which arrived at that table by compiling
+  every result with the real EJS engine. `comment = false` opts out.
+
+- **The marker style drops the space after `<%`**, which is what makes toggling
+  off unambiguous. The wrap style always leaves one and the marker style never
+  does, so the character at index 3 identifies which style produced a
+  commented line — without it, `<%# if (a) { %>` could have come from either
+  and the two uncomment to different things, one of them silently deleting a
+  tag. A delimiter marker is preserved: `<%= x %>` toggles to `<%#= x %>` and
+  back, not to a scriptlet that cannot parse.
+
+- **Uncommenting goes by the style that produced the line, not by the line's
+  shape.** Commenting changes what a line classifies as — `<p>Hi</p>` is
+  markup, and `<%# <p>Hi</p> %>` is a whole tag — so classifying the commented
+  line and uncommenting off *that* strips the wrong delimiters. This was a
+  real bug in the first draft here, caught by the round-trip assertions.
+
+- **Per-check diagnostic severities**, ported from v2.4.0: `missing_include`
+  and `broken_comment` each take `error`, `warn`, `info`, `hint` or `off`.
+  `hint` is the useful one — it leaves the underline in the buffer while
+  keeping the entry out of the location list. Each diagnostic now also carries
+  a `code` (`missing-include`, `broken-comment`).
+
+  `diagnostics = true | false` still works and maps to both checks on or off.
+
+  There is no third setting because the extension's JavaScript syntax check is
+  still deliberately not ported: `ts_ls` is attached to `<% %>` regions and
+  reports real syntax errors there with better positions than a
+  joined-program heuristic can.
+
+- **`tests/render/`, which compiles every toggle result with the real EJS
+  engine.** For every contiguous line selection of five representative
+  templates it asserts the toggle round-trips byte for byte, the result
+  compiles, and no raw `<%` or `%>` leaks into the rendered page. 56
+  selections; 48 compile clean and the other 8 are required to break, and are
+  identified from the selection rather than waved through — commenting one
+  half of a brace pair has to fail exactly as it would in JavaScript.
+
+  Not part of `nvim -l tests/run.lua`: it needs Node and the `ejs` package,
+  and the rest of the suite needs neither. It exists because handing the
+  result to EJS is the only check that does not share the assumption being
+  tested.
+
+### Changed
+
+- **`commentstring` is now the dead branch, `<% if (false) { %>%s<% } %>`,
+  rather than `<%# %s %>`.** It is only a fallback now that `gc` is
+  overridden, and it is the strictly better one: it compiles on any markup
+  selection whether or not there is a tag in it, where `<%#` compiled only
+  when there was not.
+
+### Fixed
+
+- **`gc` produced templates that would not compile, on four of the five line
+  shapes.** The README claimed Tree-sitter region resolution already handled
+  this. It does not, and it was measured rather than assumed — every shape run
+  through the real `gcc` and the result handed to EJS:
+
+  - `<% if (a) { %>` → `<%# <% if (a) { %> %>`, which **throws**
+    `Could not find matching close tag for "<%#"`.
+  - a lone `<%` → `<%# <% %>`, which throws the same way, and does something
+    worse than fail: commenting a delimiter changes the block structure the
+    rest of the selection was classified against, so the next `gc` comments
+    again instead of uncommenting.
+  - `<p><%= x %></p>` → `<!-- <p><%= x %></p> -->` with a Tree-sitter comment
+    plugin resolving per region. That compiles, and is worse for it: `x` is
+    still **evaluated** and its output shipped to the browser inside an HTML
+    comment, so the line is not commented out at all.
+  - plain markup → `<!-- … -->` rather than `<%# … %>`, which ships the line
+    to the browser instead of removing it from the output.
+
+  Only the scriptlet-body case was already right.
+
+- **`:checkhealth ejs` printed severity names as single letters.**
+  `vim.diagnostic.severity` carries short aliases (`E`, `W`, `I`, `N`)
+  alongside the long names and both directions of the mapping, so a reverse
+  lookup with `pairs` returned whichever key it reached first — `warn` came
+  out as `w`. Replaced with an explicit map.
+
+### Notes
+
+- **89 tests passing, up from 54.** The new ones cover classification of all
+  five shapes, the style each produces, byte-for-byte round trips for eight
+  line forms, style detection, mixed-selection toggling, and the severity
+  settings.
+
+- **Already done, and earlier than upstream: include-path completion
+  scoping.** ejs-colorizer's v2.5.0 closes the Known item it carried since
+  v2.3.2 — typing `include('` in body text opened a file picker. This plugin
+  fixed that in 1.1.1, and did not need the trailing-region machinery the
+  extension had to add: an unterminated `<%` yields a `code` node running to
+  the end of the buffer, so the parse tree answers "is this a tag being typed"
+  directly. Re-verified against every case v2.5.0 lists — prose, `<script>`
+  bodies, attribute values, HTML comments and a stray `%>` all offer nothing,
+  a tag being typed offers completions at end-of-file and mid-file alike, and
+  editing an existing include in a closed tag still works.
+
 ## [1.1.1] - 2026-08-10
 
 ### Fixed

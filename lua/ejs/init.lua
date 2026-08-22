@@ -18,7 +18,8 @@ function M.setup(opts)
   end
   vim.g.loaded_ejs_nvim = true
 
-  _config = vim.tbl_deep_extend('force', require('ejs.config').defaults, opts or {})
+  local config = require('ejs.config')
+  _config = vim.tbl_deep_extend('force', config.defaults, config.normalize(opts))
 
   if _config.treesitter then
     require('ejs.treesitter').setup()
@@ -44,8 +45,12 @@ function M.setup(opts)
     require('ejs.omni').setup()
   end
 
-  if _config.diagnostics then
+  if config.diagnostics_enabled(_config.diagnostics) then
     require('ejs.diagnostics').setup()
+  end
+
+  if _config.comment then
+    require('ejs.comment').setup()
   end
 
   if _config.folding then

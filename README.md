@@ -22,8 +22,11 @@ LSP configuration, and LuaSnip snippets.
 - **Hover documentation** on `K` for the delimiter under the cursor — what
   separates `<%=` from `<%-`, and `%>` from `-%>` and `_%>` — falling through
   to your LSP hover everywhere else
-- **Comment support**: `gc` produces `<%# %>` on the delimiters and, inside
-  injected regions, `<!-- -->` in markup and `//` inside `<% %>` blocks
+- **Comment support**: `gc` / `gcc` comment each line in the style its own
+  shape calls for — `<%# %>` on markup, a `#` marker on a whole tag, a
+  one-line dead branch on markup carrying a tag, `//` inside a scriptlet body
+  — because a flat `commentstring` is wrong on four of the five
+  (see [Comments](#comments))
 - **Folding** for `<% if (...) { %> … <% } %>` control-flow blocks
 - LuaSnip snippets for common EJS patterns (optional — the completion source
   offers the same scaffolds without it)
@@ -160,11 +163,25 @@ require('ejs').setup({
     snippets = true,  -- insert `<%= | %>` rather than a bare `<%=`
   },
 
-  diagnostics = true, -- unresolvable include() paths, comments that end early
-  folding     = true, -- fold <% if (...) { %> ... <% } %> blocks
-  hover       = true, -- map K, falling through to LSP hover off a delimiter
+  -- 'error' | 'warn' | 'info' | 'hint' | 'off', per check
+  diagnostics = {
+    missing_include = 'warn', -- include() paths that do not resolve
+    broken_comment  = 'warn', -- <%# %> comments that end earlier than they look
+  },
+
+  comment = true,     -- shape-aware gc / gcc (see Comments below)
+  folding = true,     -- fold <% if (...) { %> ... <% } %> blocks
+  hover   = true,     -- map K, falling through to LSP hover off a delimiter
 })
 ```
+
+`hint` is the useful severity: it leaves the underline in the buffer while
+keeping the entry out of your location list. The pre-1.2.0 spelling
+`diagnostics = true | false` still works and maps to both checks on or off.
+
+There is no setting for JavaScript syntax errors because that check is not
+ported: `ts_ls` is already attached to `<% %>` regions and reports them with
+better positions than the extension's joined-program heuristic can.
 
 ## Completion engines
 
@@ -215,15 +232,49 @@ answer where the cursor already is.
 
 ## Comments
 
-`ftplugin/ejs.lua` sets `commentstring` to `<%# %s %>`. Neovim resolves the
-comment string from the deepest Tree-sitter tree containing the cursor, so
-`gc` already does the right thing per region without any extra configuration:
-`<!-- -->` in markup, `//` inside a `<% %>` block, and `<%# %>` on the
-delimiters themselves and anywhere no injection applies.
+`gc` and `gcc` are overridden in EJS buffers, because `commentstring` is a
+single string and an EJS template is made of five distinguishable line shapes.
+Only one of them takes `<%# … %>`.
 
-Note the deliberate difference from the `ejs-colorizer` VS Code extension,
-which always wraps in `<%# %>`. Region-aware commenting is how Neovim behaves
-in every other embedded language, so matching that was the better default.
+| Where the line is | Style | Result |
+|---|---|---|
+| Markup or text | `<%# … %>` wrap | `<p>Hi</p>` → `<%# <p>Hi</p> %>` |
+| One whole EJS tag | `#` marker on the tag | `<% if (a) { %>` → `<%#if (a) { %>` |
+| Markup carrying a tag | one-line dead branch | `<p><%= x %></p>` → `<% if (false) { %><p><%= x %></p><% } %>` |
+| Inside a scriptlet body | `//` prefix | `const a = 1;` → `// const a = 1;` |
+| Only a delimiter | left alone | `<%` → `<%` |
+
+Every one of those round-trips byte for byte, and every result is compiled
+with the real EJS engine in `tests/render/`.
+
+**Why not just let `commentstring` handle it.** It was measured, and a flat
+`<%# %s %>` is wrong on four of the five shapes. `<% if (a) { %>` wrapped in
+`<%#` throws `Could not find matching close tag for "<%#"` under EJS 6,
+because EJS scans from `<%#` to the *first* `%>` and the tag's own `%>` closes
+the comment early. A lone `<%` breaks the same way. And with a Tree-sitter
+comment plugin resolving `commentstring` per region, `<p><%= x %></p>` becomes
+`<!-- <p><%= x %></p> -->` — which compiles, but still **evaluates** `x` and
+ships the result to the browser inside an HTML comment, so it is not commented
+out at all.
+
+The dead branch is the one EJS construct that suppresses a line containing a
+tag. On a single line it costs no line count, it nests, and it is strictly
+safer than what it replaces: the content is never evaluated, so commenting out
+a line that reads an undefined local stops throwing rather than starting to.
+
+`commentstring` is still set — to `<% if (false) { %>%s<% } %>` rather than
+`<%# %s %>` — as the fallback for anything that bypasses these mappings. It is
+the better static token for the same reason: it compiles on any markup
+selection whether or not there is a tag in it, where `<%#` compiled only when
+there was not.
+
+Set `comment = false` to leave `gc` alone. The `commentstring` fallback stays
+either way.
+
+Markup still comments with `<%# %>` rather than `<!-- -->`, unchanged from
+`ejs-colorizer`: `<%#` removes the line from the output, while an HTML comment
+ships it to the browser. Those are different things, and the server-side one
+is what commenting out a template line means.
 
 ## Health checks
 

@@ -1,11 +1,18 @@
 -- Buffer-local options for EJS files.
 --
--- `commentstring` is the base for `gc`. Neovim resolves the comment string
--- from the deepest Tree-sitter tree containing the cursor, so inside an
--- injected region `gc` already does the right thing on its own — `<!-- -->`
--- in markup, `//` inside a `<% %>` block. This value is what's used on the
--- delimiters themselves and anywhere no injection applies.
-vim.bo.commentstring = '<%# %s %>'
+-- `commentstring` is only a fallback here. `gc` and `gcc` are overridden per
+-- buffer by lua/ejs/comment.lua, because a single comment string cannot be
+-- right for the five line shapes an EJS template is made of and this one was
+-- wrong on four of them.
+--
+-- The dead branch is the fallback because it is strictly safer than `<%# %s %>`
+-- for anything that bypasses those mappings: it compiles on any markup
+-- selection whether or not there is a tag in it, where `<%#` compiled only
+-- when there was not — a line like `<p><%= x %></p>` wrapped in `<%#` throws
+-- `Could not find matching close tag for "<%#"` under EJS 6.
+--
+-- Measured, not assumed. Do not "fix" this back to `<%# %s %>`.
+vim.bo.commentstring = '<% if (false) { %>%s<% } %>'
 
 -- `gf` on an include path. EJS resolves a missing extension itself, so
 -- `include('partials/head')` has to grow one before it names a file, and the
